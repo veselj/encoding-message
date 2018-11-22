@@ -1,2 +1,5 @@
 pkg/
 !src/github.com/veselj/
+src/golang.org/
+src/gopkg.in/
+src/github.com/onsi/gomega/

@@ -57,11 +57,11 @@ func (d *decodeState) value(rv reflect.Value) error {
 				return errors.New("Unable to parse len tag of field")
 			}
 			chunk := d.data[d.offset:(d.offset + fl)]
-			iv, err := strconv.Atoi(string(chunk))
+			iv, err := strconv.ParseInt(string(chunk), 10, 64)
 			if err != nil {
 				return errors.New("unable to parse int from " + string(chunk))
 			}
-			rv.Field(i).SetInt(int64(iv))
+			rv.Field(i).SetInt(iv)
 		}
 	}
 	return nil
