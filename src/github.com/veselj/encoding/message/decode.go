@@ -88,20 +88,13 @@ func (d *decodeState) getChunk(length int, sep rune) (string, error) {
 func (d *decodeState) decodeStruct(rv reflect.Value) error {
 	rt := rv.Type()
 	for i := 0; i < rt.NumField(); i++ {
-		// rft := rt.Field(i)
-		// fType := rft.Type.String()
-		// var elemType reflect.Type
-		// if rft.Type.Kind() == reflect.Slice {
-		// 	elemType = rft.Type.Elem()
-		// 	fType = "slice"
-		// }
 		d.decodeField(rt.Field(i), rv.Field(i))
 	}
 	return nil
 }
 
-// decodeSimple takes a simple value from the decode stream and stores it
-// in the reflect.Value param
+// decodeField processes one field of a struct and stores it
+// in the reflect.Value param.
 func (d *decodeState) decodeField(st reflect.StructField, v reflect.Value) error {
 	var fl int
 	var err error
@@ -130,6 +123,17 @@ func (d *decodeState) decodeField(st reflect.StructField, v reflect.Value) error
 		v.SetInt(iv)
 	case reflect.String:
 		v.SetString(chunk)
+
+	case reflect.Struct:
+		d.decodeStruct(v)
+
+	case reflect.Slice:
+		elemType := st.Type.Elem()
+		d.decodeSlice(elemType, v)
 	}
 	return nil
+}
+
+func (d *decodeState) decodeSlice(t reflect.Type, v reflect.Value) {
+	return
 }
