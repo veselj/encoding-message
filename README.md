@@ -1,4 +1,7 @@
 # message-parser
+Parse messages into golang structs where the message format is expressed using golang struct tags.
+
+Generate messages from golang structs the message format is expressed using golang struct tags.
 
 Define Fields
 
@@ -8,6 +11,7 @@ type intS struct {
 
 type
     int
+    string
 
 len
     number
