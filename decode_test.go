@@ -62,14 +62,30 @@ func Test_SeparatedStruct(t *testing.T) {
 	g.Expect(msg.StrField).To(Equal("greetings"))
 }
 
-// func Test_StructSlice(t *testing.T) {
-// 	g := NewGomegaWithT(t)
-// 	type Message struct {
-// 		StrFields []string `sep:"\x1c" padding:" "`
-// 	}
-// 	var msg Message
-// 	err := message.Unmarshal([]byte(`123hi`), &msg)
-// 	g.Expect(err).To(BeNil())
-// 	g.Expect(msg.StrFields[0]).To(Equal("123"))
-// 	g.Expect(msg.StrFields[1]).To(Equal("hi"))
-// }
+func Test_StructSlice_String(t *testing.T) {
+	g := NewGomegaWithT(t)
+	type Message struct {
+		StrFields []string `sep:"\x1c" padding:" "`
+	}
+	var msg Message
+	err := message.Unmarshal([]byte(`123hi`), &msg)
+	g.Expect(err).To(BeNil())
+	g.Expect(len(msg.StrFields)).To(Equal(2))
+	g.Expect(msg.StrFields[0]).To(Equal("123"))
+	g.Expect(msg.StrFields[1]).To(Equal("hi"))
+}
+
+func Test_StructSlice_Int(t *testing.T) {
+	g := NewGomegaWithT(t)
+	type Message struct {
+		IntFields []int `sep:"\x1c" padding:" "`
+	}
+	var msg Message
+	err := message.Unmarshal([]byte(`04040-24`), &msg)
+	g.Expect(err).To(BeNil())
+	g.Expect(len(msg.IntFields)).To(Equal(4))
+	g.Expect(msg.IntFields[0]).To(Equal(0))
+	g.Expect(msg.IntFields[1]).To(Equal(4))
+	g.Expect(msg.IntFields[2]).To(Equal(40))
+	g.Expect(msg.IntFields[3]).To(Equal(-24))
+}

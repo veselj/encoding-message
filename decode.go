@@ -33,6 +33,29 @@ type decodeState struct {
 	}
 }
 
+type fieldTags struct {
+	len     int
+	sep     rune
+	padding string
+}
+
+func (t *fieldTags) decode(tag reflect.StructTag) error {
+	var err error
+	fSepRaw := tag.Get("sep")
+	t.sep, _ = utf8.DecodeRuneInString(fSepRaw)
+	if t.sep == utf8.RuneError {
+		t.sep = 0
+	}
+	fLen := tag.Get("len")
+	if len(fLen) > 0 {
+		t.len, err = strconv.Atoi(fLen)
+		if err != nil {
+			return errors.New("Unable to parse len tag of field")
+		}
+	}
+	return nil
+}
+
 // init initilises decodeState structure.
 func (d *decodeState) init(data []byte) *decodeState {
 	d.data = string(data)
@@ -57,14 +80,14 @@ func (d *decodeState) unmarshal(v interface{}) error {
 
 // getChunk gets the next chunk of data by length or by separator sep
 // length can also restrict how far separator is looked
-func (d *decodeState) getChunk(length int, sep rune) (string, error) {
+func (d *decodeState) getChunk(tags fieldTags) (string, error) {
 	var rv string
 	remaining := len(d.data) - d.offset
-	if sep == 0 {
+	if tags.sep == 0 {
 		// by length
-		if remaining >= length {
-			rv = d.data[d.offset:(d.offset + length)]
-			d.offset += length
+		if remaining >= tags.len {
+			rv = d.data[d.offset:(d.offset + tags.len)]
+			d.offset += tags.len
 		} else {
 			return "", errors.New("unsufficient remaining length in data")
 		}
@@ -73,14 +96,14 @@ func (d *decodeState) getChunk(length int, sep rune) (string, error) {
 		var found bool
 		remData := d.data[d.offset:]
 		for i, c := range remData {
-			if c == sep {
+			if c == tags.sep {
 				rv = d.data[d.offset : d.offset+i]
 				d.offset++
 				found = true
 				break
 			}
-			if length > 0 && i == length-1 {
-				rv = d.data[d.offset : d.offset+length]
+			if tags.len > 0 && i == tags.len-1 {
+				rv = d.data[d.offset : d.offset+tags.len]
 				found = true
 				break
 			}
@@ -104,32 +127,28 @@ func (d *decodeState) decodeStruct(rv reflect.Value) error {
 // decodeField processes one field of a struct and stores it
 // in the reflect.Value param.
 func (d *decodeState) decodeField(st reflect.StructField, v reflect.Value) error {
-	var fl int
-	var err error
-	fSepRaw := st.Tag.Get("sep")
-	fSep, _ := utf8.DecodeRuneInString(fSepRaw)
-	if fSep == utf8.RuneError {
-		fSep = 0
-	}
-	fLen := st.Tag.Get("len")
-	if len(fLen) > 0 {
-		fl, err = strconv.Atoi(fLen)
-		if err != nil {
-			return errors.New("Unable to parse len tag of field")
-		}
-	}
-	chunk, err := d.getChunk(fl, fSep)
+	// read fieldTags
+	var tags fieldTags
+	err := tags.decode(st.Tag)
 	if err != nil {
-		return errors.Wrap(err, "Unable to parse chunk of data")
+		return errors.Wrap(err, "unable to parse tags")
 	}
 	switch st.Type.Kind() {
 	case reflect.Int:
+		chunk, err := d.getChunk(tags)
+		if err != nil {
+			return errors.Wrap(err, "Unable to parse chunk of data")
+		}
 		iv, err := strconv.ParseInt(chunk, 10, 64)
 		if err != nil {
 			return errors.New("unable to parse int from " + chunk)
 		}
 		v.SetInt(iv)
 	case reflect.String:
+		chunk, err := d.getChunk(tags)
+		if err != nil {
+			return errors.Wrap(err, "Unable to parse chunk of data")
+		}
 		v.SetString(chunk)
 
 	case reflect.Struct:
@@ -137,11 +156,56 @@ func (d *decodeState) decodeField(st reflect.StructField, v reflect.Value) error
 
 	case reflect.Slice:
 		elemType := st.Type.Elem()
-		d.decodeSlice(elemType, v)
+		d.decodeSlice(tags, elemType, v)
 	}
 	return nil
 }
 
-func (d *decodeState) decodeSlice(t reflect.Type, v reflect.Value) {
-	return
+// decodeSlice parses a slice of values
+func (d *decodeState) decodeSlice(tags fieldTags, t reflect.Type, v reflect.Value) error {
+	switch t.Kind() {
+	case reflect.String:
+		result := make([]string, 0)
+		for {
+			chunk, err := d.getChunk(tags)
+			if err != nil {
+				return errors.Wrap(err, "unable to get chunk in decodeSlice")
+			}
+			if len(chunk) == 0 {
+				break
+			}
+			result = append(result, chunk)
+		}
+		slice := reflect.MakeSlice(reflect.TypeOf(result), len(result), len(result))
+		v.Set(slice)
+		v.SetLen(len(result))
+		for i, s := range result {
+			v.Index(i).SetString(s)
+		}
+
+	case reflect.Int:
+		result := make([]int, 0)
+		for {
+			chunk, err := d.getChunk(tags)
+			if err != nil {
+				return errors.Wrap(err, "unable to get chunk in decodeSlice")
+			}
+			if len(chunk) == 0 {
+				break
+			}
+			iv, err := strconv.ParseInt(chunk, 10, 64)
+			if err != nil {
+				return errors.New("unable to parse int from " + chunk)
+			}
+			result = append(result, int(iv))
+		}
+		slice := reflect.MakeSlice(reflect.TypeOf(result), len(result), len(result))
+		v.Set(slice)
+		v.SetLen(len(result))
+		for i, intV := range result {
+			v.Index(i).SetInt(int64(intV))
+		}
+	}
+
+	return nil
 }
